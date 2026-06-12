@@ -291,29 +291,39 @@ export function VisualSchema({ results, unit, boardType, viewType, l, w }: Visua
       const spliceRects = [];
       const chainDimensionLines = [];
 
-      // 主角材平行 W (橫跨短邊)
+      // 主角材平行 runLen
       if (results.drawParams.ms_tsai > 0) {
         if (results.drawParams.bay1LengthTsai <= 0) return null;
 
-        const mainXCoords: number[] = [];
+        const isL = results.drawParams.mainDirection === 'l';
+        const runLen = isL ? W_tsai : L_tsai;
+        const spanLen = isL ? L_tsai : W_tsai;
+        
+        // Helper to get actual SVG coordinates
+        const getSvgCoords = (runCoord: number, spanCoord: number) => {
+          const actualX = isL ? spanCoord : runCoord;
+          const actualY = isL ? runCoord : spanCoord;
+          return { x: offsetX + actualX * scale, y: offsetY + actualY * scale };
+        };
+
+        const mainRunCoords: number[] = [];
         for (let i = 0; i < mainLines; i++) {
-          const xVal = (i + 1) * ms_tsai;
-          if (xVal < L_tsai - tt_tsai) mainXCoords.push(xVal);
+          const val = (i + 1) * ms_tsai;
+          if (val < runLen - tt_tsai) mainRunCoords.push(val);
         }
 
-        mainXCoords.forEach((x, idx) => {
-          const svgX = offsetX + x * scale;
-          const svgYStart = offsetY + tt_tsai * scale;
-          const svgYEnd = offsetY + (W_tsai - tt_tsai) * scale;
+        mainRunCoords.forEach((runVal, idx) => {
+          const ptStart = getSvgCoords(runVal, tt_tsai);
+          const ptEnd = getSvgCoords(runVal, spanLen - tt_tsai);
           
           // 繪製主角材線
           mainJoistLines.push(
             <line
-              key={`main-${x}-${idx}`}
-              x1={svgX}
-              y1={svgYStart}
-              x2={svgX}
-              y2={svgYEnd}
+              key={`main-${runVal}-${idx}`}
+              x1={ptStart.x}
+              y1={ptStart.y}
+              x2={ptEnd.x}
+              y2={ptEnd.y}
               stroke="#78350f"
               strokeWidth={Math.max(2, tt_tsai * scale)}
               strokeLinecap="square"
@@ -321,17 +331,24 @@ export function VisualSchema({ results, unit, boardType, viewType, l, w }: Visua
           );
 
           // 繪製搭接
-          const innerSpan = W_tsai - 2 * tt_tsai;
+          const innerSpan = spanLen - 2 * tt_tsai;
           for (let s = 1; s <= splicesPerLine; s++) {
-            const spliceY = tt_tsai + s * 8.065; // 8.065台尺 standard size
-            if (spliceY < W_tsai - tt_tsai) {
+            const spliceSpan = tt_tsai + s * 8.065; // 8.065台尺 standard size
+            if (spliceSpan < spanLen - tt_tsai) {
+              const ptCenter = getSvgCoords(runVal, spliceSpan);
+              // The rectangle is rotated if isL
+              const rectW = isL ? spliceLen_tsai * scale : tt_tsai * scale + 4;
+              const rectH = isL ? tt_tsai * scale + 4 : spliceLen_tsai * scale;
+              const rectX = ptCenter.x - rectW / 2;
+              const rectY = ptCenter.y - rectH / 2;
+
               spliceRects.push(
                 <rect
-                  key={`splice-${x}-${s}`}
-                  x={svgX - (tt_tsai * scale) / 2 - 2}
-                  y={offsetY + (spliceY - spliceLen_tsai / 2) * scale}
-                  width={tt_tsai * scale + 4}
-                  height={spliceLen_tsai * scale}
+                  key={`splice-${runVal}-${s}`}
+                  x={rectX}
+                  y={rectY}
+                  width={rectW}
+                  height={rectH}
                   fill="#fda4af"
                   stroke="#e11d48"
                   strokeWidth="1"
@@ -344,13 +361,14 @@ export function VisualSchema({ results, unit, boardType, viewType, l, w }: Visua
           // 繪製吊筋 (紅點)
           const hangersCount = Math.floor(innerSpan / hs_tsai);
           for (let h = 1; h <= hangersCount; h++) {
-            const hY = tt_tsai + h * hs_tsai;
-            if (hY < W_tsai - tt_tsai) {
+            const hSpan = tt_tsai + h * hs_tsai;
+            if (hSpan < spanLen - tt_tsai) {
+              const ptCenter = getSvgCoords(runVal, hSpan);
               hangerDots.push(
                 <circle
-                  key={`hanger-${x}-${h}`}
-                  cx={svgX}
-                  cy={offsetY + hY * scale}
+                  key={`hanger-${runVal}-${h}`}
+                  cx={ptCenter.x}
+                  cy={ptCenter.y}
                   r="4.5"
                   fill="#ef4444"
                   stroke="#ffffff"
@@ -362,25 +380,26 @@ export function VisualSchema({ results, unit, boardType, viewType, l, w }: Visua
         });
 
         // 繪製副角材 (SS 間距分割)
-        const subYCoords = [];
-        for (let j = 1; j <= subLinesPerBay; j++) subYCoords.push(tt_tsai + j * ss_tsai);
-        const xBays = [tt_tsai, ...mainXCoords, L_tsai - tt_tsai];
+        const subSpanCoords = [];
+        for (let j = 1; j <= subLinesPerBay; j++) subSpanCoords.push(tt_tsai + j * ss_tsai);
+        const runBays = [tt_tsai, ...mainRunCoords, runLen - tt_tsai];
 
-        subYCoords.forEach((y, subIdx) => {
-          const svgY = offsetY + y * scale;
-          for (let i = 0; i < xBays.length - 1; i++) {
-            const isLastBay = i === xBays.length - 2;
+        subSpanCoords.forEach((spanVal, subIdx) => {
+          for (let i = 0; i < runBays.length - 1; i++) {
+            const isLastBay = i === runBays.length - 2;
             if (isLastBay && isNarrowLastBay) continue;
-            const startX = xBays[i] + (i === 0 ? tt_tsai : tt_tsai / 2);
-            const endX = xBays[i + 1] - (isLastBay ? tt_tsai : tt_tsai / 2);
-            if (startX < endX) {
+            const startRun = runBays[i] + (i === 0 ? tt_tsai : tt_tsai / 2);
+            const endRun = runBays[i + 1] - (isLastBay ? tt_tsai : tt_tsai / 2);
+            if (startRun < endRun) {
+              const ptStart = getSvgCoords(startRun, spanVal);
+              const ptEnd = getSvgCoords(endRun, spanVal);
               subJoistLines.push(
                 <line
-                  key={`sub-${y}-${i}-${subIdx}`}
-                  x1={offsetX + startX * scale}
-                  y1={svgY}
-                  x2={offsetX + endX * scale}
-                  y2={svgY}
+                  key={`sub-${spanVal}-${i}-${subIdx}`}
+                  x1={ptStart.x}
+                  y1={ptStart.y}
+                  x2={ptEnd.x}
+                  y2={ptEnd.y}
                   stroke="#b45309"
                   strokeWidth={Math.max(1.5, (tt_tsai / 2) * scale)}
                   strokeDasharray="1,1"
@@ -391,19 +410,21 @@ export function VisualSchema({ results, unit, boardType, viewType, l, w }: Visua
         });
 
         // 結尾收頭
-        if (isNarrowLastBay && xBays.length >= 2) {
-          const startX = xBays[xBays.length - 2] + tt_tsai / 2;
-          const endX = xBays[xBays.length - 1] - tt_tsai;
+        if (isNarrowLastBay && runBays.length >= 2) {
+          const startRun = runBays[runBays.length - 2] + tt_tsai / 2;
+          const endRun = runBays[runBays.length - 1] - tt_tsai;
           for (let j = 1; j <= subLinesLastBay; j++) {
-            const y = tt_tsai + j * lastBaySubSpacingTsai;
-            if (y < W_tsai - tt_tsai && startX < endX) {
+            const spanVal = tt_tsai + j * lastBaySubSpacingTsai;
+            if (spanVal < spanLen - tt_tsai && startRun < endRun) {
+              const ptStart = getSvgCoords(startRun, spanVal);
+              const ptEnd = getSvgCoords(endRun, spanVal);
               subJoistLines.push(
                 <line
-                  key={`sub-last-${y}-${j}`}
-                  x1={offsetX + startX * scale}
-                  y1={offsetY + y * scale}
-                  x2={offsetX + endX * scale}
-                  y2={offsetY + y * scale}
+                  key={`sub-last-${spanVal}-${j}`}
+                  x1={ptStart.x}
+                  y1={ptStart.y}
+                  x2={ptEnd.x}
+                  y2={ptEnd.y}
                   stroke="#ea580c"
                   strokeWidth={Math.max(1.5, (tt_tsai / 2) * scale)}
                 />
@@ -413,50 +434,70 @@ export function VisualSchema({ results, unit, boardType, viewType, l, w }: Visua
         }
 
         // 繪製鏈條尺寸
-        const hBays = [];
+        const dimRunBays = [];
         if (mainLines === 0) {
-          hBays.push({ start: tt_tsai, end: L_tsai - tt_tsai, label: formatDim(L_tsai - 2 * tt_tsai) });
+          dimRunBays.push({ start: tt_tsai, end: runLen - tt_tsai, label: formatDim(runLen - 2 * tt_tsai) });
         } else {
-          hBays.push({ start: tt_tsai, end: ms_tsai - 0.5 * tt_tsai, label: formatDim(bay1LengthTsai) });
+          dimRunBays.push({ start: tt_tsai, end: ms_tsai - 0.5 * tt_tsai, label: formatDim(bay1LengthTsai) });
           for (let i = 1; i < mainLines; i++) {
-            hBays.push({
+            dimRunBays.push({
               start: i * ms_tsai + 0.5 * tt_tsai,
               end: (i + 1) * ms_tsai - 0.5 * tt_tsai,
               label: formatDim(bayMidLengthTsai),
             });
           }
           const lastJoistRight = mainLines * ms_tsai + 0.5 * tt_tsai;
-          if (lastJoistRight < L_tsai - tt_tsai) {
-            hBays.push({ start: lastJoistRight, end: L_tsai - tt_tsai, label: formatDim(bayLastLengthTsai) });
+          if (lastJoistRight < runLen - tt_tsai) {
+            dimRunBays.push({ start: lastJoistRight, end: runLen - tt_tsai, label: formatDim(bayLastLengthTsai) });
           }
         }
-        hBays.forEach((bay, idx) => {
-          const dimEl = renderHDim(
-            bay.start * scale + offsetX,
-            bay.end * scale + offsetX,
-            offsetY - 18,
-            bay.label
-          );
-          if (dimEl) chainDimensionLines.push(React.cloneElement(dimEl, { key: `dim-h-${idx}` }));
+        dimRunBays.forEach((bay, idx) => {
+          if (isL) {
+             const dimEl = renderVDim(
+              bay.start * scale + offsetY,
+              bay.end * scale + offsetY,
+              offsetX - 20,
+              bay.label
+            );
+            if (dimEl) chainDimensionLines.push(React.cloneElement(dimEl, { key: `dim-run-v-${idx}` }));
+          } else {
+             const dimEl = renderHDim(
+              bay.start * scale + offsetX,
+              bay.end * scale + offsetX,
+              offsetY - 18,
+              bay.label
+            );
+            if (dimEl) chainDimensionLines.push(React.cloneElement(dimEl, { key: `dim-run-h-${idx}` }));
+          }
         });
 
-        const vBays = [];
-        vBays.push({ start: tt_tsai, end: tt_tsai + ss_tsai, label: formatDim(ss_tsai) });
+        const dimSpanBays = [];
+        dimSpanBays.push({ start: tt_tsai, end: tt_tsai + ss_tsai, label: formatDim(ss_tsai) });
         for (let j = 1; j < subLinesPerBay; j++) {
-          vBays.push({ start: tt_tsai + j * ss_tsai, end: tt_tsai + (j + 1) * ss_tsai, label: formatDim(ss_tsai) });
+          dimSpanBays.push({ start: tt_tsai + j * ss_tsai, end: tt_tsai + (j + 1) * ss_tsai, label: formatDim(ss_tsai) });
         }
-        const lastSubY = tt_tsai + subLinesPerBay * ss_tsai;
-        if (lastSubY < W_tsai - tt_tsai) {
-          vBays.push({ start: lastSubY, end: W_tsai - tt_tsai, label: formatDim(W_tsai - tt_tsai - lastSubY) });
+        const lastSubVal = tt_tsai + subLinesPerBay * ss_tsai;
+        if (lastSubVal < spanLen - tt_tsai) {
+          dimSpanBays.push({ start: lastSubVal, end: spanLen - tt_tsai, label: formatDim(spanLen - tt_tsai - lastSubVal) });
         }
-        vBays.forEach((bay, idx) => {
-          const dimEl = renderVDim(
-            bay.start * scale + offsetY,
-            bay.end * scale + offsetY,
-            offsetX - 20,
-            bay.label
-          );
-          if (dimEl) chainDimensionLines.push(React.cloneElement(dimEl, { key: `dim-v-${idx}` }));
+        dimSpanBays.forEach((bay, idx) => {
+          if (isL) {
+             const dimEl = renderHDim(
+              bay.start * scale + offsetX,
+              bay.end * scale + offsetX,
+              offsetY - 18,
+              bay.label
+            );
+            if (dimEl) chainDimensionLines.push(React.cloneElement(dimEl, { key: `dim-span-h-${idx}` }));
+          } else {
+             const dimEl = renderVDim(
+              bay.start * scale + offsetY,
+              bay.end * scale + offsetY,
+              offsetX - 20,
+              bay.label
+            );
+            if (dimEl) chainDimensionLines.push(React.cloneElement(dimEl, { key: `dim-span-v-${idx}` }));
+          }
         });
       }
 

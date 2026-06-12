@@ -58,6 +58,7 @@ export interface DrawParams {
   bay1LengthTsai: number;
   bayMidLengthTsai: number;
   bayLastLengthTsai: number;
+  mainDirection: MainDirection;
 }
 
 export interface CalculatorResults {

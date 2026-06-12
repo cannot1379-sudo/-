@@ -324,6 +324,7 @@ export function calculateCeiling(
       bay1LengthTsai,
       bayMidLengthTsai,
       bayLastLengthTsai,
+      mainDirection: inputs.mainDirection,
     },
   };
 }
