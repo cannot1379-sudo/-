@@ -1,0 +1,6 @@
+{
+  "name": "木作天花板角材與封板精算系統",
+  "description": "專業級木作天花板角材與封板精算系統。支援 3x6 矽酸鈣板 / 3x7 4mm 夾板，整合 2D Guillotine 二維裁切打包算法，自動優化廢料配置，提供視覺化 2D 放樣及實務排版圖。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
